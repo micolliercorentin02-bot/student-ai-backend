@@ -1,7 +1,6 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const rateLimit = require("express-rate-limit");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
@@ -13,8 +12,63 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// PATH du fichier JSON
+// PATH du fichier JSON (Railway compatible)
 const USERS_FILE = path.join(__dirname, "users.json");
+
+app.post("/register", (req, res) => {
+  const { email } = req.body;
+
+  if (!email) return res.status(400).json({ error: "email missing" });
+
+  let users = loadUsers();
+
+  if (users[email]) {
+    return res.status(400).json({ error: "User already exists" });
+  }
+
+  users[email] = { count: 0, last: dayjs().format("YYYY-MM-DD") };
+  saveUsers(users);
+
+  res.json({ message: "Account created", email });
+});
+
+app.post("/login", (req, res) => {
+  const { email } = req.body;
+
+  if (!email) return res.status(400).json({ error: "email missing" });
+
+  let users = loadUsers();
+
+  if (!users[email]) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  res.json({ message: "Login successful", email });
+});
+
+app.post("/remaining", (req, res) => {
+  const { email } = req.body;
+
+  if (!email) return res.status(400).json({ error: "email missing" });
+
+  let users = loadUsers();
+
+  if (!users[email]) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  const today = dayjs().format("YYYY-MM-DD");
+
+  if (users[email].last !== today) {
+    users[email].last = today;
+    users[email].count = 0;
+    saveUsers(users);
+  }
+
+  const remaining = 25 - users[email].count;
+  res.json({ remaining: remaining < 0 ? 0 : remaining });
+});
+
 
 // Charger les users
 function loadUsers() {
@@ -74,9 +128,8 @@ app.post("/ask", async (req, res) => {
     );
 
     res.json({ answer: aiResponse.data.choices[0].message.content });
-
   } catch (err) {
-    console.log(err.response?.data || err);
+    console.error("AI ERROR:", err.response?.data || err);
     res.status(500).json({ error: "AI request failed" });
   }
 });
