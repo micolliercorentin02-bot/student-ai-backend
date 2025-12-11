@@ -18,6 +18,8 @@ const USERS_FILE = path.join(__dirname, "users.json");
 // ----------------------------------------------------
 // 🔧 LOAD USERS (100% sécurisé, jamais de JSON cassé)
 // ----------------------------------------------------
+console.log("Reading:", USERS_FILE);
+
 function loadUsers() {
   try {
     if (!fs.existsSync(USERS_FILE)) {
