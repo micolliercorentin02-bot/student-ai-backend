@@ -166,6 +166,17 @@ app.post("/ask", async (req, res) => {
   }
 });
 
+// Debug : voir le contenu du fichier users.json sur Railway
+app.get("/check-users", (req, res) => {
+  try {
+    const content = fs.readFileSync(USERS_FILE, "utf8");
+    res.send("<pre>" + content + "</pre>");
+  } catch (err) {
+    res.send(err.toString());
+  }
+});
+
+
 // ----------------------------------------------------
 app.listen(PORT, () =>
   console.log("🔥 Backend running on port " + PORT)
