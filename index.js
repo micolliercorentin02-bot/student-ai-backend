@@ -12,26 +12,12 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// PATH du fichier JSON (Railway compatible)
+// FICHIER DES UTILISATEURS (Railway OK)
 const USERS_FILE = path.join(__dirname, "users.json");
 
-app.post("/register", (req, res) => {
-  const { email } = req.body;
-
-  if (!email) return res.status(400).json({ error: "email missing" });
-
-  let users = loadUsers();
-
-  if (users[email]) {
-    return res.status(400).json({ error: "User already exists" });
-  }
-
-  users[email] = { count: 0, last: dayjs().format("YYYY-MM-DD") };
-  saveUsers(users);
-
-  res.json({ message: "Account created", email });
-});
-
+// ----------------------------------------------------
+// 🔧 LOAD USERS (100% sécurisé, jamais de JSON cassé)
+// ----------------------------------------------------
 function loadUsers() {
   try {
     if (!fs.existsSync(USERS_FILE)) {
@@ -39,30 +25,79 @@ function loadUsers() {
       return {};
     }
 
-    const content = fs.readFileSync(USERS_FILE, "utf-8").trim();
+    const raw = fs.readFileSync(USERS_FILE, "utf8").trim();
+    if (!raw) return {};
 
-    if (!content) return {};
+    return JSON.parse(raw);
 
-    return JSON.parse(content);
-
-  } catch (err) {
-    console.log("User file corrupted, resetting.");
+  } catch (e) {
+    console.log("⚠️ users.json corrompu, reset...");
     fs.writeFileSync(USERS_FILE, "{}");
     return {};
   }
 }
 
+// Sauvegarde
+function saveUsers(users) {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+}
 
+// ----------------------------------------------------
+// 📌 REGISTER : créer un compte
+// ----------------------------------------------------
+app.post("/register", (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password)
+    return res.status(400).json({ error: "email/password missing" });
+
+  const users = loadUsers();
+
+  if (users[email]) {
+    return res.status(400).json({ error: "User already exists" });
+  }
+
+  users[email] = {
+    password,
+    count: 0,
+    last: dayjs().format("YYYY-MM-DD")
+  };
+
+  saveUsers(users);
+
+  res.json({ success: true });
+});
+
+// ----------------------------------------------------
+// 📌 LOGIN : vérifier identifiants
+// ----------------------------------------------------
+app.post("/login", (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password)
+    return res.status(400).json({ error: "email/password missing" });
+
+  const users = loadUsers();
+
+  if (!users[email] || users[email].password !== password) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  res.json({ success: true });
+});
+
+// ----------------------------------------------------
+// 📌 Remaining requests
+// ----------------------------------------------------
 app.post("/remaining", (req, res) => {
   const { email } = req.body;
 
-  if (!email) return res.status(400).json({ error: "email missing" });
+  if (!email)
+    return res.status(400).json({ error: "email missing" });
 
-  let users = loadUsers();
-
-  if (!users[email]) {
+  const users = loadUsers();
+  if (!users[email])
     return res.status(404).json({ error: "User not found" });
-  }
 
   const today = dayjs().format("YYYY-MM-DD");
 
@@ -73,22 +108,12 @@ app.post("/remaining", (req, res) => {
   }
 
   const remaining = 25 - users[email].count;
-  res.json({ remaining: remaining < 0 ? 0 : remaining });
+  res.json({ remaining: Math.max(0, remaining) });
 });
 
-
-// Charger les users
-function loadUsers() {
-  if (!fs.existsSync(USERS_FILE)) return {};
-  return JSON.parse(fs.readFileSync(USERS_FILE));
-}
-
-// Sauvegarder users
-function saveUsers(users) {
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-}
-
-// Limite 25 requêtes / jour
+// ----------------------------------------------------
+// 📌 Limiteur de requêtes
+// ----------------------------------------------------
 function checkLimit(email) {
   const users = loadUsers();
 
@@ -110,7 +135,9 @@ function checkLimit(email) {
   return true;
 }
 
-// ROUTE POUR POSER DES QUESTIONS
+// ----------------------------------------------------
+// 📌 ASK : envoyer une question à GPT-4o mini
+// ----------------------------------------------------
 app.post("/ask", async (req, res) => {
   const { email, question } = req.body;
 
@@ -127,11 +154,7 @@ app.post("/ask", async (req, res) => {
         model: "gpt-4o-mini",
         messages: [{ role: "user", content: question }]
       },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-        }
-      }
+      { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } }
     );
 
     res.json({ answer: aiResponse.data.choices[0].message.content });
@@ -141,4 +164,7 @@ app.post("/ask", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log("Backend running on port " + PORT));
+// ----------------------------------------------------
+app.listen(PORT, () =>
+  console.log("🔥 Backend running on port " + PORT)
+);
