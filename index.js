@@ -32,19 +32,26 @@ app.post("/register", (req, res) => {
   res.json({ message: "Account created", email });
 });
 
-app.post("/login", (req, res) => {
-  const { email } = req.body;
+function loadUsers() {
+  try {
+    if (!fs.existsSync(USERS_FILE)) {
+      fs.writeFileSync(USERS_FILE, "{}");
+      return {};
+    }
 
-  if (!email) return res.status(400).json({ error: "email missing" });
+    const content = fs.readFileSync(USERS_FILE, "utf-8").trim();
 
-  let users = loadUsers();
+    if (!content) return {};
 
-  if (!users[email]) {
-    return res.status(404).json({ error: "User not found" });
+    return JSON.parse(content);
+
+  } catch (err) {
+    console.log("User file corrupted, resetting.");
+    fs.writeFileSync(USERS_FILE, "{}");
+    return {};
   }
+}
 
-  res.json({ message: "Login successful", email });
-});
 
 app.post("/remaining", (req, res) => {
   const { email } = req.body;
